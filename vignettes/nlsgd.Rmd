@@ -1,0 +1,229 @@
+---
+title: "nlsgd"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{nlsgd}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(StochasticGradientDescent)
+```
+
+# simple implementation of the Stochastic Descent  Algorithm with ADAM adaptation
+
+Lets build a function that represent the sum of two Normals
+
+```{r}
+sum_of_Normals <- function(A1,mean1,sd1,A2,mean2,sd2,x1,x2)
+{
+  
+  return(A1*exp(-(x1 - mean1)^2/sd1^2) + A2*exp(-(x2 - mean2)^2/sd2^2))
+
+}
+
+
+```
+
+This function is not in the right shape to be processed by slm algorithm. We should organize the parameters a little better. The idea is to put all the parameters we want to guess in a vector beta, and all the independent variables we measure and that we take for granted (we are not modelling those) in a matrix X.
+For that we build four helper functions that pack and unpack the parameters and the independent variables
+
+
+First we pack the parameters
+```{r}
+par_to_beta <- function(par)
+{
+  return(
+    c(
+      logA1 = log(par$A1),
+      mean1 = par$mean1,
+      logsd1 = log(par$sd1),
+      logA2 = log(par$A2),
+      mean2 = par$mean2,
+      logsd2 = log(par$sd2)
+    )
+  )
+}
+
+```
+
+Notice that we did some parameter convertions on the fly: as both the amplitudes and the standard deviation are always positive, we take their logarithm so the can go from minus infinity to plus infinity. In this way, we dont have to place bounds to the algorithm. 
+
+We also build its inverse
+```{r}
+beta_to_par <- function(beta) {
+  return(list(
+    A1 = unname(exp(beta["logA1"])),
+    mean1 = unname(beta["mean1"]),
+    sd1 = unname(exp(beta["logsd1"])),
+    A2 = unname(exp(beta["logA2"])),
+    mean2 = unname(beta["mean2"]),
+    sd2 = unname(exp(beta["logsd2"]))
+  ))
+}
+
+```
+
+
+We can now just made up some parameter values 
+```{r}
+par_real = list(
+  A1 = 12.3,
+  mean1 = 24,
+  sd1 = 17.3,
+  A2 = 0.23,
+  mean2 = 21.2 ,
+  sd2 = 5
+)
+
+```
+And see our functions at work
+```{r}
+beta_real = par_to_beta(par_real)
+beta_real
+```
+
+and we can recover the parameter values
+```{r}
+beta_to_par(beta_real)
+
+```
+
+we can do an automatic check to see if the functions works as desired
+
+```{r}
+testthat::test_that("beta_to_par is the inverse of par_to_beta",
+                    {
+                      testthat::expect_true(all.equal(par_real, beta_to_par(par_to_beta(par_real))))
+                    })
+
+```
+
+
+Now we do the same for the independent variables x1 and x2
+
+function for pack
+```{r}
+var_to_X <- function(var)
+{
+  return(cbind(var$x1,var$x2))
+  
+}
+
+```
+
+and the reverse
+
+```{r}
+X_to_var <- function(X){
+  return(list(x1 = X[, 1],
+               x2 = X[, 2]))
+}
+```
+
+Lets build a variable
+```{r}
+var0=list(x1=runif(1e5) * 100 - 20, x2=runif(1e5) * 100 - 20)
+```
+
+and check also the duality invertible property
+
+
+```{r}
+testthat::test_that(
+  "X_to_var is the inverse of var_to_X",
+  {
+    testthat::expect_true(all.equal(var0, X_to_var(var_to_X(var0))))
+  })
+
+```
+
+Now we can build a version of sum_of_Normals that works with slm
+
+
+```{r}
+
+sum_of_Normals_slm <- function(beta, X)
+{
+  p = beta_to_par(beta)
+  v = X_to_var(X)
+  return(
+    sum_of_Normals(
+      A1 = p$A1,
+      mean1 = p$mean1,
+      sd1 = p$sd1,
+      A2 = p$A2,
+      mean2 = p$mean2,
+      sd2 = p$sd2,
+      x1 = v$x1,
+      x2 = v$x2
+    )
+  )
+}
+
+```
+
+Now lets calculate the values of Y
+```{r}
+Y = sum_of_Normals(A1 = par_real$A1,mean1 = par_real$mean1,sd1 = par_real$sd1, A2 = par_real$A2, mean2 = par_real$mean2, sd2 = par_real$sd2,x1 = var0$x1, x2=var0$x2)
+
+```
+
+and check the corresponding duality
+
+```{r}
+testthat::test_that(
+  "sum_of_Normals operated over each of the variables is equal to sum_of_Normals_slm applied to beta and X",
+  {
+    testthat::expect_true(
+      all.equal(Y, sum_of_Normals_slm(
+        beta = par_to_beta(par_real),
+        X= var_to_X(var0))))
+  })
+
+```
+Lets add some noise
+```{r}
+Yn = Y + rnorm(length(Y))*0.2
+```
+
+
+
+Now we have a version that is suited for sml
+
+We now want to recover the value of the parameters given the Y
+
+we need to supply sml with an initial guess
+
+```{r}
+par_init=list(
+    A1 = 12.3*exp(rnorm(1)/2),
+  mean1 = 24*exp(rnorm(1)/2),
+  sd1 = 17.3*exp(rnorm(1)/2),
+  A2 = 0.23*exp(rnorm(1)/2),
+  mean2 = 21.2*exp(rnorm(1)/2) ,
+  sd2 = 5*exp(rnorm(1)/2))
+
+```
+
+We have now everything we need to use slm
+```{r}
+beta_init=par_to_beta(par_init)
+X=var_to_X(var0)
+
+opt=nlsqrsgd(f = sum_of_Normals_slm, x0 = beta_init,xdata = X,         ydata = Yn,number_of_chunks = 100)
+opt
+```
+
+
+
+
+
