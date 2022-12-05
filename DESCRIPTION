@@ -1,9 +1,9 @@
 Package: StochasticGradientDescent
-Title: What the Package Does (One Line, Title Case)
+Title: Implements the Stochastic Gradient Descent with ADAM adaptation
 Version: 0.0.0.9000
 Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"),
-           comment = c(ORCID = "YOUR-ORCID-ID"))
+    person("Luciano", "Moffatt", , "lmoffatt@gmail.com", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0003-4994-4304"))
 Description: What the package does (one paragraph).
 License: MIT + file LICENSE
 Encoding: UTF-8
@@ -13,3 +13,5 @@ Suggests:
     knitr,
     rmarkdown
 VignetteBuilder: knitr
+Imports: 
+    testthat
