@@ -21,6 +21,35 @@ Jacobian_by_diff <- function(f, x, xdata, eps)
   return (dYdx)
 }
 
+gradient_by_diff <- function(f, x, xdata, ydata=NULL,eps=1e-5)
+{
+  if (is.null(ydata))
+    ydata=0
+  k = length(x)
+  Y = f(x, xdata)
+  dYdx = Reduce(function(p, i)
+  {
+    e = numeric(length(x))
+    e[i] = max(1, abs(x[i])) * eps
+    Yi = f(x + e, xdata)
+    dYi = (Yi - Y) / e[i]
+    return(cbind(p, dYi))
+  },
+  1:k, init = matrix(nrow = nrow(xdata), ncol = 0))
+  d_f__d_x= Conj(t(dYdx)) %*% (Y - ydata)
+
+
+  f_name = deparse(substitute(f))
+  x_names = names(x)
+  if (is.null(x_names))
+    x_names = 1:length(x)
+
+
+
+  rownames(d_f__d_x) <- paste0(f_name, '_', x_names)
+  return (d_f__d_x)
+}
+
 
 get_stochastic_indexes <-
   function(number_of_samples, number_of_chunks)
@@ -89,16 +118,43 @@ nlsqrsgd <- function(f,
                      tol_gradient = 1e-5,
                      tol_x = 1e-5,
                      return_Ft = FALSE,
+                     gradient = NULL,
                      Jacobian = NULL,
+                     use_gradient = FALSE,
                      alpha = 0.001,
                      beta1 = 0.9,
                      beta2 = 0.999,
                      eps = 1e-8,
                      eps_J = 1e-5)
 {
-  ydata = matrix(data = as.numeric(ydata), ncol = 1)
+  if (!is.matrix(ydata))
+    ydata = matrix(ydata, ncol = 1)
   stopifnot("same number of rows" = nrow(xdata) == nrow(ydata))
-  k = length(x0)
+
+  if (!is.null(gradient))
+    use_gradient = TRUE
+
+  if ((use_gradient) && (is.null(gradient)))
+    gradient <- function(x,xdata,ydata)
+      gradient_by_diff(f = f,
+                       x = x,
+                       xdata = xdata,
+                       ydata = ydata,
+                       eps = eps_J)
+
+  if ((!use_gradient) && (is.null(Jacobian)))
+
+    Jacobian <-
+    function(x, xdata)
+      Jacobian_by_diff(
+        f = f,
+        x = x,
+        xdata = xdata,
+        eps = eps_J
+      )
+
+
+    k = length(x0)
 
 
   initial_step <- function(x0)
@@ -110,8 +166,8 @@ nlsqrsgd <- function(f,
       xp = x0,
       mt = mt,
       vt = vt,
-      sqrsum_tot=0,
-      gradient_tot= numeric(k),
+      sqrsum_tot = 0,
+      gradient_tot = numeric(k),
       done = FALSE
     )
     return(ca)
@@ -119,15 +175,6 @@ nlsqrsgd <- function(f,
   }
 
 
-  if (is.null(Jacobian))
-    Jacobian <-
-    function(x, xdata)
-      Jacobian_by_diff(
-        f = f,
-        x = x,
-        xdata = xdata,
-        eps = eps_J
-      )
 
   n = nrow(xdata)
   stc_ind = get_stochastic_indexes(number_of_samples = n, number_of_chunks = number_of_chunks)
@@ -144,8 +191,13 @@ nlsqrsgd <- function(f,
       Ft = f(pr$xt, xdata[ii,])
       yt = ydata[ii,]
       ca$sqrsum_i = sum((Ft - yt) ^ 2)
-      Jt = Jacobian(ca$x, xdata[ii,])
-      ca$gradient_t = t(Jt) %*% (Ft - yt)
+      if (use_gradient)
+        ca$gradient_t = gradient(ca$x, xdata[ii,],yt)
+      else
+      {
+        Jt = Jacobian(ca$x, xdata[ii,])
+        ca$gradient_t = Conj(t(Jt)) %*% (Ft - yt)
+      }
       ca$sqrsum_tot = pr$sqrsum_tot + ca$sqrsum_t
       ca$gradient_tot = pr$gradient_tot + ca$gradient_t
       ca$mt = beta1 * pr$mt + (1 - beta1) * ca$gradient_t

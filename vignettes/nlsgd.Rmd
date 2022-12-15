@@ -219,7 +219,7 @@ We have now everything we need to use slm
 beta_init=par_to_beta(par_init)
 X=var_to_X(var0)
 
-opt=nlsqrsgd(f = sum_of_Normals_slm, x0 = beta_init,xdata = X,         ydata = Yn,number_of_chunks = 100)
+opt=nlsqrsgd(f = sum_of_Normals_slm, x0 = beta_init,xdata = X,         ydata = Yn,number_of_chunks = 1000,maxiter = 1e6)
 opt
 ```
 
