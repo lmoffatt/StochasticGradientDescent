@@ -115,6 +115,7 @@ nlsqrsgd <- function(f,
                      ydata,
                      number_of_chunks,
                      maxiter = 10000,
+                     is_complex = FALSE,
                      tol_gradient = 1e-5,
                      tol_x = 1e-5,
                      return_Ft = FALSE,
@@ -127,6 +128,8 @@ nlsqrsgd <- function(f,
                      eps = 1e-8,
                      eps_J = 1e-5)
 {
+  if (is.complex(x0))
+    is_complex = TRUE
   if (!is.matrix(ydata))
     ydata = matrix(ydata, ncol = 1)
   stopifnot("same number of rows" = nrow(xdata) == nrow(ydata))
@@ -159,8 +162,10 @@ nlsqrsgd <- function(f,
 
   initial_step <- function(x0)
   {
-    mt = numeric(k)
-    vt =  numeric(k)
+    if (is_complex)
+    {
+    mt = complex(k)
+    vt =  complex(k)
     ca = list(
       xt = x0,
       xp = x0,
@@ -171,6 +176,22 @@ nlsqrsgd <- function(f,
       done = FALSE
     )
     return(ca)
+    }
+    else
+    {
+      mt = numeric(k)
+      vt =  numeric(k)
+      ca = list(
+        xt = x0,
+        xp = x0,
+        mt = mt,
+        vt = vt,
+        sqrsum_tot = 0,
+        gradient_tot = numeric(k),
+        done = FALSE)
+      return(ca)
+
+    }
 
   }
 

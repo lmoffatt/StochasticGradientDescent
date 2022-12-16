@@ -12,6 +12,7 @@ nlsqrsgd(
   ydata,
   number_of_chunks,
   maxiter = 10000,
+  is_complex = FALSE,
   tol_gradient = 1e-05,
   tol_x = 1e-05,
   return_Ft = FALSE,
