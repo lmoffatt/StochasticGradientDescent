@@ -172,7 +172,7 @@ nlsqrsgd <- function(f,
       mt = mt,
       vt = vt,
       sqrsum_tot = 0,
-      gradient_tot = numeric(k),
+      gradient_tot = complex(k),
       done = FALSE
     )
     return(ca)
@@ -211,12 +211,12 @@ nlsqrsgd <- function(f,
       ii = stc_ind[[(t - 1) %% number_of_chunks + 1]]
       Ft = f(pr$xt, xdata[ii,])
       yt = ydata[ii,]
-      ca$sqrsum_i = sum((Ft - yt) ^ 2)
+      ca$sqrsum_t = Re(sum(Conj(Ft - yt)*(Ft - yt)))
       if (use_gradient)
-        ca$gradient_t = gradient(ca$x, xdata[ii,],yt)
+        ca$gradient_t = gradient(pr$xt, xdata[ii,],yt)
       else
       {
-        Jt = Jacobian(ca$x, xdata[ii,])
+        Jt = Jacobian(pr$xt, xdata[ii,])
         ca$gradient_t = Conj(t(Jt)) %*% (Ft - yt)
       }
       ca$sqrsum_tot = pr$sqrsum_tot + ca$sqrsum_t
@@ -224,7 +224,8 @@ nlsqrsgd <- function(f,
       ca$mt = beta1 * pr$mt + (1 - beta1) * ca$gradient_t
       ca$vt = beta2 * pr$vt + (1 - beta2) * ca$gradient_t ^ 2
       alphat = alpha * sqrt(1 - beta2 ^ t) / (1 - beta1 ^ t)
-      ca$xt = as.numeric(pr$xt - alphat * ca$mt / (sqrt(ca$vt) + eps))
+      ca$xt = pr$xt
+      ca$xt[seq_along(ca$xt)] = ca$xt- alphat * ca$mt / (sqrt(ca$vt) + eps)
       names(ca$xt) <- names(pr$xt)
 
 
@@ -235,7 +236,7 @@ nlsqrsgd <- function(f,
       }
       if (t %% number_of_chunks != 0)
         return(ca)
-      else if (max(abs(ca$gradient_tot)) < tol_gradient)
+      else if (max(abs(Re(ca$gradient_tot))) < tol_gradient)
       {
         ca$stopcondition = list(reason = 'small gradient norm', gradient_norm =
                                   max(abs(ca$gradient_tot)))
